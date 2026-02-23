@@ -5,24 +5,25 @@ import threading
 import os
 import html
 
-# --- SERVER QISMI ---
+# --- SERVER UCHUN (Render uyg'oq turishi uchun) ---
 app = Flask('')
 @app.route('/')
-def home(): return "Bot is live!"
+def home(): return "Bot 24/7 rejimida!"
 def run(): app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
 def keep_alive():
     t = threading.Thread(target=run)
     t.start()
 
-# --- BOT SOZLAMALARI ---
+# --- ASOSIY SOZLAMALAR ---
 TOKEN = "7887838088:AAExTVAoTCJp0THpdug06E0sP-7TAo0n7mM"
 ADMIN_ID = 6286567822  # Sizning ID
 CHANNEL_ID = "@efotball_1v1"
 bot = telebot.TeleBot(TOKEN)
-user_temp = {}
-published_ads = {} # E'lonlarim bo'limi uchun
 
-# --- ASOSIY MENYU ---
+user_temp = {}
+published_ads = {} # Foydalanuvchi e'lonlari va FAST imkoniyatlari
+
+# --- TUGMALAR ---
 def main_menu():
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     markup.add("➕ E'lon berish", "📂 E'lonlarim", "👨‍💻 Adminlar", "📚 Qoidalar", "💰 E'lon narxlari")
@@ -30,107 +31,161 @@ def main_menu():
 
 @bot.message_handler(commands=['start'])
 def start(message):
-    bot.send_message(message.chat.id, "🌟 <b>Assalomu alaykum!</b>\nAkkaunt sotish uchun barcha ma'lumotlarni kiriting.", reply_markup=main_menu(), parse_mode="HTML")
+    bot.send_message(
+        message.chat.id, 
+        f"👋 <b>Assalomu alaykum, {message.from_user.first_name}!</b>\n\n"
+        "E'lon berish botimizga xush kelibsiz! 😊\n"
+        "Bu yerda hamma narsa avvalgidek — qulay va tezkor.\n\n"
+        "👇 Kerakli bo'limni tanlang:", 
+        reply_markup=main_menu(), 
+        parse_mode="HTML"
+    )
 
 # --- QOIDALAR ---
 @bot.message_handler(func=lambda m: m.text == "📚 Qoidalar")
 def rules(message):
-    bot.send_message(message.chat.id, "1. Yolg'on ma'lumot taqiqlanadi.\n2. To'lovdan so'ng e'lon chiqadi.")
+    bot.send_message(message.chat.id, 
+        "📚 <b>Botdan foydalanish qoidalari:</b>\n\n"
+        "1️⃣ Faqat real akkauntlar e'lon qilinishi shart.\n"
+        "2️⃣ Yolg'on ma'lumot berish qat'iyan taqiqlanadi.\n"
+        "3️⃣ To'lov qilingandan so'ng e'lon adminga boradi.\n"
+        "4️⃣ Savdolarni faqat @kattabekov (Garant) orqali qiling.",
+        parse_mode="HTML")
 
-# --- E'LONLARIM BO'LIMI ---
+# --- E'LON NARXLARI ---
+@bot.message_handler(func=lambda m: m.text == "💰 E'lon narxlari")
+def price_info(message):
+    bot.send_message(message.chat.id, 
+        "💳 <b>E'lon berish narxi:</b>\n\n"
+        "Bir martalik e'lon — <b>2 000 so'm</b>.\n\n"
+        "To'lovni amalga oshirgach, e'loningiz tekshirilib kanalga chiqariladi. ✅", 
+        parse_mode="HTML")
+
+# --- ADMINLAR ---
+@bot.message_handler(func=lambda m: m.text == "👨‍💻 Adminlar")
+def admin_info(message):
+    bot.send_message(message.chat.id, "👨‍💻 <b>Asosiy admin:</b> @kattabekov\n\nHar qanday muammo bo'yicha murojaat qilishingiz mumkin! 😊", parse_mode="HTML")
+
+# --- E'LONLARIM VA FAST TIZIMI ---
 @bot.message_handler(func=lambda m: m.text == "📂 E'lonlarim")
 def my_ads(message):
     uid = message.chat.id
-    if uid in published_ads:
-        for ad in published_ads[uid]:
+    if uid in published_ads and published_ads[uid]:
+        for idx, ad in enumerate(published_ads[uid]):
             markup = types.InlineKeyboardMarkup()
-            markup.add(types.InlineKeyboardButton("⚡️ FAST (TEZKOR)", callback_data="fast_info"))
+            # Har bir e'lon uchun 2 marta FAST imkoniyati
+            btn_text = f"⚡️ FAST (Qolgan imkoniyat: {ad['fast_count']})"
+            markup.add(types.InlineKeyboardButton(btn_text, callback_data=f"fast_{uid}_{idx}"))
+            
             bot.send_photo(uid, ad['photo'], caption=ad['caption'], reply_markup=markup, parse_mode="HTML")
     else:
-        bot.send_message(uid, "🗂 Sizda hali tasdiqlangan e'lonlar yo'q.")
+        bot.send_message(uid, "😕 <b>Sizda hali tasdiqlangan e'lonlar yo'q.</b>", parse_mode="HTML")
 
-@bot.callback_query_handler(func=lambda call: call.data == "fast_info")
-def fast_info(call):
-    bot.answer_callback_query(call.id, "Bu e'lon tezkor sotuvda!", show_alert=True)
+@bot.callback_query_handler(func=lambda call: call.data.startswith("fast_"))
+def handle_fast(call):
+    _, uid, idx = call.data.split("_")
+    uid, idx = int(uid), int(idx)
+    
+    ad = published_ads[uid][idx]
+    if ad['fast_count'] > 0:
+        ad['fast_count'] -= 1
+        # Kanalga "FAST" belgisi bilan qayta chiqarish yoki xabar berish
+        bot.send_message(CHANNEL_ID, f"⚡️ <b>TEZKOR SOTUV!</b>\n\n{ad['caption']}", parse_mode="HTML")
+        bot.answer_callback_query(call.id, f"🚀 E'lon kanalga TEZKOR qilib qayta yuborildi! (Qoldi: {ad['fast_count']})", show_alert=True)
+        # Tugmani yangilash uchun "E'lonlarim"ni qayta ko'rsatishni tavsiya qilamiz
+    else:
+        bot.answer_callback_query(call.id, "❌ Bu e'lon uchun FAST imkoniyatlari tugagan!", show_alert=True)
 
-# --- E'LON BERISH VA TO'LOV ---
+# --- E'LON BERISH JARAYONI ---
 @bot.message_handler(func=lambda m: m.text == "➕ E'lon berish")
-def start_ad(message):
-    bot.send_message(message.chat.id, "📸 Akkaunt rasmini yuboring:")
-    bot.register_next_step_handler(message, get_photo)
+def step1(message):
+    bot.send_message(message.chat.id, "📸 <b>Ajoyib! Avvalo akkauntingiz rasmini yuboring:</b>", parse_mode="HTML")
+    bot.register_next_step_handler(message, step2)
 
-def get_photo(message):
+def step2(message):
     if not message.photo:
-        bot.send_message(message.chat.id, "⚠️ Rasm yuboring!")
+        bot.send_message(message.chat.id, "⚠️ Iltimos, rasm yuboring!")
+        bot.register_next_step_handler(message, step2)
         return
     user_temp[message.chat.id] = {'photo': message.photo[-1].file_id}
-    bot.send_message(message.chat.id, "💰 Akkaunt narxi:")
-    bot.register_next_step_handler(message, get_price)
+    bot.send_message(message.chat.id, "💰 <b>Endi narxini yozing:</b>", parse_mode="HTML")
+    bot.register_next_step_handler(message, step3)
 
-def get_price(message):
+def step3(message):
     user_temp[message.chat.id]['price'] = message.text
-    bot.send_message(message.chat.id, "📝 Akkaunt haqida batafsil ma'lumot (Level, o'yinchilar):")
-    bot.register_next_step_handler(message, get_desc)
+    bot.send_message(message.chat.id, "📝 <b>Akkaunt haqida batafsil ma'lumot bering:</b>\n(Level, o'yinchilar va h.k.)", parse_mode="HTML")
+    bot.register_next_step_handler(message, step4)
 
-def get_desc(message):
+def step4(message):
     user_temp[message.chat.id]['desc'] = html.escape(message.text)
-    # TO'LOV BOSQICHI
-    payment_text = (
-        "💳 <b>To'lov qilish vaqti keldi!</b>\n\n"
-        "E'lon narxi: 2 000 so'm\n"
-        "Karta raqami: <code>8600123456789012</code> (Namuna)\n"
-        "Ega: SARDORBEK K.\n\n"
-        "✅ To'lovni amalga oshirib, <b>chekni (skrinshot)</b> shu yerga yuboring!"
+    # KARTA MA'LUMOTI (TO'G'RI KARTA)
+    payment_msg = (
+        "💳 <b>To'lov ma'lumotlari:</b>\n\n"
+        "E'lonni chiqarish uchun to'lov qiling:\n"
+        "💰 <b>Narxi:</b> 2 000 so'm\n"
+        "💳 <b>Karta:</b> <code>5440810304875684</code>\n"
+        "👤 <b>Ega:</b> G A\n\n"
+        "✅ To'lovni qilgach, <b>to'lov chekini (rasmini)</b> shu yerga yuboring. Adminga tasdiqlash uchun yuboraman! 😊"
     )
-    bot.send_message(message.chat.id, payment_text, parse_mode="HTML")
-    bot.register_next_step_handler(message, get_check)
+    bot.send_message(message.chat.id, payment_msg, parse_mode="HTML")
+    bot.register_next_step_handler(message, step5_check)
 
-def get_check(message):
+def step5_check(message):
     uid = message.chat.id
     if not message.photo:
-        bot.send_message(uid, "⚠️ Iltimos, to'lov chekini rasm ko'rinishida yuboring!")
-        bot.register_next_step_handler(message, get_check)
+        bot.send_message(uid, "⚠️ Iltimos, chekni rasm sifatida yuboring!")
+        bot.register_next_step_handler(message, step5_check)
         return
     
-    bot.send_message(uid, "⏳ <b>Rahmat! To'lovingiz adminga yuborildi.</b> Tasdiqlangach e'lon kanalga chiqadi.")
+    bot.send_message(uid, "⏳ <b>Rahmat!</b> Chek va ma'lumotlar adminga yuborildi. Tasdiqlanishini kuting... ✅", parse_mode="HTML")
     
-    # ADMINGA TASDIQLASH UCHUN
     markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("✅ Tasdiqlash", callback_data=f"ok_{uid}"),
-               types.InlineKeyboardButton("❌ Rad etish", callback_data=f"no_{uid}"))
+    markup.add(types.InlineKeyboardButton("✅ Tasdiqlash", callback_data=f"accept_{uid}"),
+               types.InlineKeyboardButton("❌ Rad etish", callback_data=f"reject_{uid}"))
     
-    # Adminga chekni yuborish
-    bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption=f"💰 <b>Yangi to'lov cheki!</b>\nFoydalanuvchi: @{message.from_user.username}", parse_mode="HTML")
-    # Adminga e'lonni yuborish
+    # Adminga chek va e'lonni yuborish
+    bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption=f"💰 <b>Yangi to'lov cheki!</b>\nKimdan: @{message.from_user.username}", parse_mode="HTML")
     bot.send_photo(ADMIN_ID, user_temp[uid]['photo'], 
                    caption=f"📋 <b>E'lon ma'lumotlari:</b>\n\nNarxi: {user_temp[uid]['price']}\nMa'lumot: {user_temp[uid]['desc']}", 
                    parse_mode="HTML", reply_markup=markup)
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith(("ok_", "no_")))
-def admin_verify(call):
+@bot.callback_query_handler(func=lambda call: call.data.startswith(("accept_", "reject_")))
+def admin_control(call):
     action, uid = call.data.split("_")
     uid = int(uid)
     
-    if action == "ok":
+    if action == "accept":
         d = user_temp.get(uid)
         if d:
-            contact = f"@{call.from_user.username}" if call.from_user.username else f"ID: {uid}"
-            caption = f"🔥 <b>#SOTILADI</b>\n\n💰 Narxi: {d['price']}\n📝 Ma'lumot: {d['desc']}\n👤 Murojaat: {contact}\n\n♻️ Garant: @kattabekov"
+            user = bot.get_chat(uid)
+            contact = f"@{user.username}" if user.username else f"ID: {uid}"
             
-            # Kanalga chiqarish
-            bot.send_photo(CHANNEL_ID, d['photo'], caption=caption, parse_mode="HTML")
+            chan_caption = (
+                f"🔥 <b>#SOTILADI #EFOOTBALL</b>\n\n"
+                f"💰 <b>Narxi:</b> {d['price']}\n"
+                f"📋 <b>Ma'lumot:</b> {d['desc']}\n"
+                f"👤 <b>Murojaat:</b> {contact}\n\n"
+                f"🤝 <b>Garant:</b> @kattabekov\n"
+                f"📢 <b>Kanal:</b> {CHANNEL_ID}"
+            )
             
-            # E'lonlarim bo'limiga saqlash
+            bot.send_photo(CHANNEL_ID, d['photo'], caption=chan_caption, parse_mode="HTML")
+            
+            # E'lonlarimga saqlash va 2 ta FAST imkoniyati berish
             if uid not in published_ads: published_ads[uid] = []
-            published_ads[uid].append({'photo': d['photo'], 'caption': caption})
+            published_ads[uid].append({
+                'photo': d['photo'], 
+                'caption': chan_caption,
+                'fast_count': 2
+            })
             
-            bot.send_message(uid, "🎉 <b>Xushxabar! To'lovingiz tasdiqlandi va e'lon kanalga chiqdi.</b>")
+            bot.send_message(uid, "🎉 <b>Xushxabar!</b> E'loningiz kanalga joylandi! 'E'lonlarim' bo'limidan FAST xizmatini ishlatishingiz mumkin.")
             bot.edit_message_caption("✅ Tasdiqlandi", call.message.chat.id, call.message.message_id)
     else:
-        bot.send_message(uid, "❌ Afsuski, to'lovingiz tasdiqlanmadi. Qayta urinib ko'ring yoki adminga yozing.")
+        bot.send_message(uid, "❌ <b>Afsuski, e'loningiz tasdiqlanmadi.</b>")
         bot.edit_message_caption("❌ Rad etildi", call.message.chat.id, call.message.message_id)
 
 if __name__ == "__main__":
     keep_alive()
     bot.polling(none_stop=True)
-    
+                                  
