@@ -5,7 +5,7 @@ import threading
 import os
 import html
 import re
-import json # Statistika uchun
+import json
 from PIL import Image, ImageDraw
 import requests
 from io import BytesIO
@@ -13,7 +13,7 @@ from io import BytesIO
 # --- SERVER ---
 app = Flask('')
 @app.route('/')
-def home(): return "Bot uyg'oq, hushmuomala va statistikani hisoblamoqda!"
+def home(): return "Bot uyg'oq va o'ta hushmuomala! 😊"
 def run(): app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
 def keep_alive():
     t = threading.Thread(target=run)
@@ -26,14 +26,9 @@ CHANNEL_ID = "@efotball_1v1"
 bot = telebot.TeleBot(TOKEN)
 
 SHABLON_RASM = "https://img.freepik.com/free-vector/gaming-controller-concept-illustration_114360-3162.jpg"
-
-user_temp = {}
-published_ads = {}
-news_temp = {}
-
-# --- STATISTIKA UCHUN BAZA ---
 USER_DB = "users.json"
 
+# --- BAZA FUNKSIYALARI ---
 def save_user(user_id):
     users = get_users()
     if str(user_id) not in users:
@@ -42,12 +37,14 @@ def save_user(user_id):
             json.dump(users, f)
 
 def get_users():
-    if not os.path.exists(USER_DB):
-        return []
-    with open(USER_DB, "r") as f:
-        return json.load(f)
+    if not os.path.exists(USER_DB): return []
+    with open(USER_DB, "r") as f: return json.load(f)
 
-# --- FUNKSIYALAR ---
+# --- YORDAMCHI FUNKSIYALAR ---
+user_temp = {}
+published_ads = {}
+news_temp = {}
+
 def clean_text(text):
     if not text: return ""
     text = re.sub(r'@\S+', '', text)
@@ -64,30 +61,29 @@ def main_menu(user_id):
         markup.add("📊 Statistika", "📢 Reklama yuborish")
     return markup
 
-# --- BOSHLANG'ICH XABAR ---
+# --- ASOSIY BUYRUQLAR ---
 @bot.message_handler(commands=['start'])
 def start(message):
-    save_user(message.chat.id) # Foydalanuvchini bazaga qo'shish
+    save_user(message.chat.id)
     ism = message.from_user.first_name
     bot.send_message(
         message.chat.id, 
-        f"🌟 <b>Assalomu alaykum, {ism}!</b>\n\n"
-        f"Botimizga xush kelibsiz. Bu yerda siz eFootball akkauntlaringizni "
-        f"tez va xavfsiz sota olasiz. 😊\n\n"
-        f"Marhamat, kerakli bo'limni tanlang:", 
+        f"🌟 <b>Assalomu alaykum, {ism} 🤍!</b>\n\n"
+        f"Botimizga xush kelibsiz. Hozirda e'lon berish <b>vaqtinchalik BEPUL!</b> 😊\n"
+        f"Marhamat, e'lon joylashtirishingiz yoki kerakli bo'limni tanlashingiz mumkin:", 
         reply_markup=main_menu(message.chat.id), 
         parse_mode="HTML"
     )
 
-# --- STATISTIKA VA REKLAMA (ADMIN) ---
+# --- ADMIN STATISTIKA VA REKLAMA ---
 @bot.message_handler(func=lambda m: m.text == "📊 Statistika" and m.chat.id == ADMIN_ID)
 def show_stats(message):
     users = get_users()
-    bot.send_message(message.chat.id, f"📊 <b>Bot foydalanuvchilari statistikasi:</b>\n\n👤 Jami foydalanuvchilar: <b>{len(users)} ta</b>", parse_mode="HTML")
+    bot.send_message(message.chat.id, f"📊 <b>Botimiz statistikasi:</b>\n\n👤 Foydalanuvchilar soni: <b>{len(users)} ta</b>\n🌟 Bot stabil holatda ishlamoqda!", parse_mode="HTML")
 
 @bot.message_handler(func=lambda m: m.text == "📢 Reklama yuborish" and m.chat.id == ADMIN_ID)
 def start_broadcast(message):
-    msg = bot.send_message(message.chat.id, "📢 <b>Barcha foydalanuvchilarga yuboriladigan xabar matnini yuboring:</b>", parse_mode="HTML")
+    msg = bot.send_message(message.chat.id, "📢 <b>Barcha foydalanuvchilarga yuboriladigan xabar matnini kiriting:</b>", parse_mode="HTML")
     bot.register_next_step_handler(msg, send_broadcast)
 
 def send_broadcast(message):
@@ -97,15 +93,14 @@ def send_broadcast(message):
         try:
             bot.send_message(user, message.text, parse_mode="HTML")
             count += 1
-        except:
-            continue
-    bot.send_message(ADMIN_ID, f"✅ Reklama <b>{count}</b> ta foydalanuvchiga muvaffaqiyatli yuborildi!", parse_mode="HTML")
+        except: continue
+    bot.send_message(ADMIN_ID, f"✅ Reklama <b>{count}</b> ta odamga muvaffaqiyatli yetib bordi!", parse_mode="HTML")
 
-# --- ADMIN UCHUN YANGILIKLAR TAHRIRI ---
+# --- ADMIN UCHUN YANGILIKLARNI TAHRIRLASH ---
 @bot.message_handler(content_types=['photo'], func=lambda m: m.chat.id == ADMIN_ID)
 def handle_news_photo(message):
     if message.chat.id not in user_temp:
-        processing_msg = bot.send_message(message.chat.id, "🖌 <b>Tayyorlanmoqda...</b>", parse_mode="HTML")
+        processing_msg = bot.send_message(message.chat.id, "🖌 <b>Begona reklamalar tozalanmoqda va rasm tayyorlanmoqda...</b>", parse_mode="HTML")
         file_info = bot.get_file(message.photo[-1].file_id)
         response = requests.get(f'https://api.telegram.org/file/bot{TOKEN}/{file_info.file_path}')
         img = Image.open(BytesIO(response.content)).convert("RGB")
@@ -113,15 +108,21 @@ def handle_news_photo(message):
         width, height = img.size
         draw.text((width - 160, height - 40), "@efotball_1v1", fill=(255, 255, 255))
         bio = BytesIO(); bio.name = 'news.jpg'; img.save(bio, 'JPEG'); bio.seek(0)
+        
         cleaned_caption = clean_text(message.caption if message.caption else "")
-        full_caption = f"{cleaned_caption}\n\n📍 <b>Sahifamiz:</b> @efotball_1v1✔️\n🤝 <b>Garant:</b> @kattabekov\n🚀 <b>Bot:</b> @efotball1v1_bot"
+        full_caption = (
+            f"{cleaned_caption}\n\n"
+            f"📍 <b>Sahifamiz:</b> @efotball_1v1 ✔️\n"
+            f"🤝 <b>Garant:</b> @kattabekov\n"
+            f"🚀 <b>Bot:</b> @efotball1v1_bot"
+        )
         news_temp[message.chat.id] = {'photo': bio.getvalue(), 'caption': full_caption}
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("🚀 Kanalga yuborish", callback_data="send_news"),
                    types.InlineKeyboardButton("📝 Matnni tahrirlash", callback_data="edit_news_text"),
                    types.InlineKeyboardButton("❌ Bekor qilish", callback_data="cancel_news"))
         bot.delete_message(message.chat.id, processing_msg.message_id)
-        bot.send_photo(message.chat.id, bio.getvalue(), caption=f"✨ <b>Tayyor ko'rinish:</b>\n\n{full_caption}", parse_mode="HTML", reply_markup=markup)
+        bot.send_photo(message.chat.id, bio.getvalue(), caption=f"✨ <b>Tayyor ko'rinish (Tasdiqlaysizmi?):</b>\n\n{full_caption}", parse_mode="HTML", reply_markup=markup)
 
 @bot.callback_query_handler(func=lambda call: call.data in ["send_news", "cancel_news", "edit_news_text"])
 def callback_news(call):
@@ -132,9 +133,11 @@ def callback_news(call):
             bot.answer_callback_query(call.id, "✅ Kanalga yuborildi!", show_alert=True)
             bot.delete_message(call.message.chat.id, call.message.message_id)
     elif call.data == "edit_news_text":
-        msg = bot.send_message(call.message.chat.id, "📝 <b>Yangi matnni yozing:</b>", parse_mode="HTML")
+        msg = bot.send_message(call.message.chat.id, "📝 <b>Yangi matnni yuboring (Eski matn butunlay o'chadi):</b>", parse_mode="HTML")
         bot.register_next_step_handler(msg, process_new_news_text)
-    else: bot.delete_message(call.message.chat.id, call.message.message_id)
+    else:
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+        bot.send_message(call.message.chat.id, "❌ Amalyot bekor qilindi.")
 
 def process_new_news_text(message):
     uid = message.chat.id
@@ -146,36 +149,36 @@ def process_new_news_text(message):
                    types.InlineKeyboardButton("❌ Bekor qilish", callback_data="cancel_news"))
         bot.send_photo(uid, news_temp[uid]['photo'], caption=f"✅ <b>Matn yangilandi:</b>\n\n{message.text}", parse_mode="HTML", reply_markup=markup)
 
-# --- BO'LIMLAR (HUSHMOOMALA) ---
+# --- BO'LIMLAR MATNLARI ---
 @bot.message_handler(func=lambda m: m.text == "📚 Qoidalar")
 def rules(message):
-    bot.send_message(message.chat.id, "📚 <b>Bot foydalanish qoidalari:</b>\n\n1. Faqat real ma'lumot.\n2. Firibgarlik taqiqlanadi.\n3. Savdolar @kattabekov orqali.", parse_mode="HTML")
+    text = "📚 <b>Garant: @kattabekov</b>\n\nBotdan foydalanish orqali siz barcha xavfsizlik qoidalariga rozilik bildirasiz. Akkauntlarni faqat ishonchli adminlar orqali soting! 🛡"
+    bot.send_message(message.chat.id, text, parse_mode="HTML")
 
 @bot.message_handler(func=lambda m: m.text == "👨‍💻 Adminlar")
 def admins(message):
-    bot.send_message(message.chat.id, "👨‍💻 <b>Admin:</b> @kattabekov\nSavollar bo'lsa, yozing! 😊", parse_mode="HTML")
+    bot.send_message(message.chat.id, "👨‍💻 <b>Adminimiz:</b> @kattabekov\nSavollar yoki takliflar bo'lsa, bemalol murojaat qiling! 😊", parse_mode="HTML")
 
 @bot.message_handler(func=lambda m: m.text == "💰 E'lon narxlari")
 def prices(message):
-    bot.send_message(message.chat.id, "💰 <b>Aksiya:</b> Hozirda e'lon berish <b>mutlaqo BEPUL!</b>", parse_mode="HTML")
+    bot.send_message(message.chat.id, "💰 <b>Hozircha BEPUL!</b>\n\nFursatdan foydalanib, o'z akkauntingizni tezroq sotib oling! ✨", parse_mode="HTML")
 
-# --- E'LON BERISH ---
+# --- E'LON BERISH JARAYONI ---
 @bot.message_handler(func=lambda m: m.text == "➕ E'lon berish")
 def step1(message):
-    bot.send_photo(message.chat.id, SHABLON_RASM, caption="📸 <b>Akkaunt rasmini yuboring:</b>", parse_mode="HTML")
+    bot.send_photo(message.chat.id, SHABLON_RASM, caption="📸 <b>Iltimos, akkaunt rasmini yuboring:</b>", parse_mode="HTML")
     bot.register_next_step_handler(message, step2)
 
 def step2(message):
     if not message.photo:
-        bot.send_message(message.chat.id, "⚠️ Rasm yuboring!")
-        bot.register_next_step_handler(message, step2); return
+        bot.send_message(message.chat.id, "⚠️ Rasm yuborishingiz shart!"); bot.register_next_step_handler(message, step2); return
     user_temp[message.chat.id] = {'photo': message.photo[-1].file_id}
-    bot.send_message(message.chat.id, "💰 <b>Narxini kiriting:</b>", parse_mode="HTML")
+    bot.send_message(message.chat.id, "💰 <b>Akkaunt narxini kiriting:</b>", parse_mode="HTML")
     bot.register_next_step_handler(message, step3)
 
 def step3(message):
     user_temp[message.chat.id]['price'] = message.text
-    bot.send_message(message.chat.id, "📝 <b>Batafsil ma'lumot:</b>", parse_mode="HTML")
+    bot.send_message(message.chat.id, "📝 <b>Akkaunt haqida batafsil ma'lumot bering:</b>", parse_mode="HTML")
     bot.register_next_step_handler(message, step4)
 
 def step4(message):
@@ -187,7 +190,7 @@ def step4(message):
     sent_msg = bot.send_photo(CHANNEL_ID, d['photo'], caption=caption, parse_mode="HTML")
     if uid not in published_ads: published_ads[uid] = []
     published_ads[uid].append({'photo': d['photo'], 'caption': caption, 'fast_count': 2, 'message_id': sent_msg.message_id})
-    bot.send_message(uid, "🎉 <b>Tabriklaymiz!</b> E'lon kanalga joylandi. ✅", reply_markup=main_menu(uid), parse_mode="HTML")
+    bot.send_message(uid, "🎉 <b>Tabriklaymiz!</b> E'loningiz kanalga muvaffaqiyatli joylandi. ✅", reply_markup=main_menu(uid), parse_mode="HTML")
     del user_temp[uid]
 
 @bot.message_handler(func=lambda m: m.text == "📂 E'lonlarim")
@@ -199,22 +202,23 @@ def my_ads(message):
             markup = types.InlineKeyboardMarkup()
             markup.add(types.InlineKeyboardButton(f"⚡️ FAST ({ad['fast_count']})", callback_data=f"fast_{uid}_{idx}"))
             bot.send_photo(uid, ad['photo'], caption=ad['caption'], reply_markup=markup, parse_mode="HTML")
-    else: bot.send_message(uid, "😕 E'lonlar yo'q.", parse_mode="HTML")
+    else: bot.send_message(uid, "😕 <b>E'lonlaringiz mavjud emas.</b>", parse_mode="HTML")
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("fast_"))
 def handle_fast_start(call):
     _, uid, idx = call.data.split("_")
     uid, idx = int(uid), int(idx)
     if published_ads[uid][idx]['fast_count'] > 0:
-        msg = bot.send_message(call.message.chat.id, "🚀 <b>Yangi narx:</b>", parse_mode="HTML")
+        msg = bot.send_message(call.message.chat.id, "🚀 <b>Yangi narxni yuboring:</b>", parse_mode="HTML")
         bot.register_next_step_handler(msg, handle_fast_finish, uid, idx)
-    else: bot.answer_callback_query(call.id, "❌ FAST tugadi.", show_alert=True)
+    else: bot.answer_callback_query(call.id, "❌ FAST imkoniyati tugagan!", show_alert=True)
 
 def handle_fast_finish(message, uid, idx):
     yangi_narx = message.text; ad = published_ads[uid][idx]; ad['fast_count'] -= 1
     bot.send_message(CHANNEL_ID, f"⚡️ <b>#TEZKOR_SOTUV</b>\n\n💰 <b>Yangi narx:</b> {yangi_narx}", reply_to_message_id=ad['message_id'], parse_mode="HTML")
-    bot.send_message(uid, f"✅ Bajarildi! (Qoldi: {ad['fast_count']})", parse_mode="HTML")
+    bot.send_message(uid, f"✅ FAST bajarildi! Qolgan imkoniyat: {ad['fast_count']}", parse_mode="HTML")
 
 if __name__ == "__main__":
     keep_alive()
     bot.polling(none_stop=True)
+                   
